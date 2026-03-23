@@ -20,14 +20,12 @@ class WheelSlice {
 class WheelSettingsScreen extends StatefulWidget {
   final List<String> initialItems;
   final List<WheelSlice>? initialSlices;
-  final double? initialSpinTime;
   final String? wheelTitle;
 
   const WheelSettingsScreen({
     super.key, 
     required this.initialItems,
     this.initialSlices,
-    this.initialSpinTime,
     this.wheelTitle,
   });
 
@@ -40,7 +38,6 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
   late final TextEditingController _titleController;
   List<WheelSlice> _slices = [];
   int _sliceRepeat = 1;
-  double _spinTime = 4;
   List<Color> _colorPalette = [
     const Color(0xFF4CAF50),
     const Color(0xFF00BCD4),
@@ -62,12 +59,14 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
       text: widget.wheelTitle ?? 'Vòng quay mới'
     );
     
-    // Load saved settings
-    _spinTime = widget.initialSpinTime ?? 4;
-    
     // If we have saved slices configuration, use it
     if (widget.initialSlices != null && widget.initialSlices!.isNotEmpty) {
       _slices = List.from(widget.initialSlices!);
+      
+      // Set _sliceRepeat to the first slice's repeat value (they should all be the same if set via slider)
+      if (_slices.isNotEmpty) {
+        _sliceRepeat = _slices.first.repeat;
+      }
     } 
     // Otherwise, convert initial items to slices
     else if (widget.initialItems.isNotEmpty) {
@@ -86,6 +85,11 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
         colorIndex++;
         return slice;
       }).toList();
+      
+      // Set _sliceRepeat based on loaded data
+      if (_slices.isNotEmpty) {
+        _sliceRepeat = _slices.first.repeat;
+      }
     }
     // If empty, leave _slices empty - user will add items manually
   }
@@ -132,18 +136,6 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
         ));
       });
     }
-  }
-
-  void _shuffleSlices() {
-    setState(() {
-      _slices.shuffle();
-    });
-  }
-
-  void _sortSlices() {
-    setState(() {
-      _slices.sort((a, b) => a.name.compareTo(b.name));
-    });
   }
 
   void _deleteSlice(int index) {
@@ -254,20 +246,19 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
         title: Row(
           children: [
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
+              child: Text(
+                _titleController.text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, {
                 'items': _generateFinalList(),
                 'slices': _slices,
-                'spinTime': _spinTime,
               }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
@@ -303,23 +294,13 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _titleController.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Color(0xFF4CAF50)),
-                        onPressed: () {},
-                      ),
-                    ],
+                  Text(
+                    _titleController.text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   
@@ -370,18 +351,6 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
                                 });
                               },
                             ),
-                            const SizedBox(height: 12),
-                            
-                            // Spin time
-                            _buildSliderControl(
-                              'Spin time',
-                              _spinTime,
-                              1,
-                              10,
-                              '${_spinTime.round()}x',
-                              const Color(0xFF4CAF50),
-                              (value) => setState(() => _spinTime = value),
-                            ),
                           ],
                         ),
                       ),
@@ -398,7 +367,7 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
                 children: [
                   // Slices header
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -406,21 +375,9 @@ class _WheelSettingsScreenState extends State<WheelSettingsScreen> {
                           'Slices',
                           style: TextStyle(color: Colors.white70, fontSize: 14),
                         ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.shuffle, color: Color(0xFF4CAF50)),
-                              onPressed: _shuffleSlices,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.sort_by_alpha, color: Color(0xFF4CAF50)),
-                              onPressed: _sortSlices,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle, color: Color(0xFF4CAF50)),
-                              onPressed: _addSlice,
-                            ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.add_circle, color: Color(0xFF4CAF50)),
+                          onPressed: _addSlice,
                         ),
                       ],
                     ),

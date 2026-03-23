@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prm393_pe/data/implementations/local/app_database.dart';
 import 'package:prm393_pe/views/wheel/lucky_wheel_screen.dart';
+import 'package:prm393_pe/utils/page_transitions.dart';
 import 'dart:math' as math;
 
 class WheelLibraryScreen extends StatefulWidget {
@@ -34,10 +35,9 @@ class _WheelLibraryScreenState extends State<WheelLibraryScreen> {
     if (title != null && title.trim().isNotEmpty) {
       final wheelId = await AppDatabase.instance.insertSavedWheel(title.trim(), 4.0);
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LuckyWheelScreen(wheelId: wheelId, wheelTitle: title.trim()),
+        Navigator.of(context).push(
+          PageTransitions.heroZoom(
+            LuckyWheelScreen(wheelId: wheelId, wheelTitle: title.trim()),
           ),
         ).then((_) => _loadSavedWheels());
       }
@@ -114,10 +114,9 @@ class _WheelLibraryScreenState extends State<WheelLibraryScreen> {
   }
 
   void _openWheel(int wheelId, String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LuckyWheelScreen(wheelId: wheelId, wheelTitle: title),
+    Navigator.of(context).push(
+      PageTransitions.scale(
+        LuckyWheelScreen(wheelId: wheelId, wheelTitle: title),
       ),
     ).then((_) => _loadSavedWheels());
   }
@@ -159,16 +158,6 @@ class _WheelLibraryScreenState extends State<WheelLibraryScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bolt, color: Colors.amber),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -206,23 +195,10 @@ class _WheelLibraryScreenState extends State<WheelLibraryScreen> {
                     return _buildWheelCard(wheel);
                   },
                 ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'star',
-            onPressed: () {},
-            backgroundColor: Colors.purple,
-            child: const Icon(Icons.star, color: Colors.white),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'add',
-            onPressed: _createNewWheel,
-            backgroundColor: Colors.red.shade700,
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _createNewWheel,
+        backgroundColor: Colors.red.shade700,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

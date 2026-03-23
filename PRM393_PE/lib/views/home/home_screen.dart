@@ -3,9 +3,33 @@ import 'package:prm393_pe/views/history/history_screen.dart';
 import 'package:prm393_pe/views/lucky_number//lucky_number_screen.dart';
 import 'package:prm393_pe/views/red_envelope/red_envelope_screen.dart';
 import 'package:prm393_pe/views/wheel/wheel_library_screen.dart';
+import 'package:prm393_pe/utils/page_transitions.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,36 +85,36 @@ class HomeScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildGameCard(
+                      _buildAnimatedGameCard(
                         context,
+                        delay: 0,
                         icon: '🎡',
                         title: 'Vòng Quay May Mắn',
                         subtitle: 'Quay và nhận quà',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WheelLibraryScreen()),
+                        onTap: () => Navigator.of(context).push(
+                          PageTransitions.slideAndFade(const WheelLibraryScreen()),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _buildGameCard(
+                      _buildAnimatedGameCard(
                         context,
+                        delay: 200,
                         icon: '🎰',
                         title: 'Random Số May Mắn',
                         subtitle: 'Quay số trúng thưởng',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LuckyNumberScreen()),
+                        onTap: () => Navigator.of(context).push(
+                          PageTransitions.slideAndFade(const LuckyNumberScreen()),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _buildGameCard(
+                      _buildAnimatedGameCard(
                         context,
+                        delay: 400,
                         icon: '🧧',
                         title: 'Lì Xì May Mắn',
                         subtitle: 'Chọn bao lì xì của bạn',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const RedEnvelopeScreen()),
+                        onTap: () => Navigator.of(context).push(
+                          PageTransitions.slideAndFade(const RedEnvelopeScreen()),
                         ),
                       ),
                     ],
@@ -102,9 +126,8 @@ class HomeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                  onPressed: () => Navigator.of(context).push(
+                    PageTransitions.slideFromBottom(const HistoryScreen()),
                   ),
                   icon: const Icon(Icons.history, color: Colors.white),
                   label: const Text(
@@ -124,6 +147,37 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildAnimatedGameCard(
+    BuildContext context, {
+    required int delay,
+    required String icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 600 + delay),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(50 * (1 - value), 0),
+          child: Opacity(
+            opacity: value.clamp(0.0, 1.0),
+            child: child,
+          ),
+        );
+      },
+      child: _buildGameCard(
+        context,
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        onTap: onTap,
+      ),
+    );
+  }
+
   Widget _buildGameCard(
     BuildContext context, {
     required String icon,
@@ -133,7 +187,9 @@ class HomeScreen extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      child: Container(
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,

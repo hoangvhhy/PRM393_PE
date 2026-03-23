@@ -3,6 +3,8 @@ import 'package:flutter_fortune_wheel/flutter_fortune_wheel.dart';
 import 'dart:async';
 import 'package:prm393_pe/services/storage_service.dart';
 import 'package:prm393_pe/data/implementations/local/app_database.dart';
+import 'package:confetti/confetti.dart';
+import 'package:prm393_pe/utils/page_transitions.dart';
 import 'wheel_settings_screen.dart';
 import 'wheel_probability_screen.dart';
 
@@ -23,11 +25,11 @@ class LuckyWheelScreen extends StatefulWidget {
 class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
   final StreamController<int> _controller = StreamController<int>.broadcast();
   final TextEditingController _textController = TextEditingController();
+  late ConfettiController _confettiController;
   List<String> _items = [];
   List<WheelSlice>? _slices; // Store slices configuration
   bool _isSpinning = false;
   String? _winner;
-  double _spinTime = 4; // Spin duration in seconds
   
   // For detecting multiple taps on settings button
   int _settingsTapCount = 0;
@@ -36,6 +38,7 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     if (widget.wheelId != null) {
       _loadWheelData();
     }
@@ -43,11 +46,6 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
 
   Future<void> _loadWheelData() async {
     if (widget.wheelId == null) return;
-    
-    final wheel = await AppDatabase.instance.getSavedWheel(widget.wheelId!);
-    if (wheel != null) {
-      _spinTime = (wheel['spin_time'] as num).toDouble();
-    }
 
     final slicesData = await AppDatabase.instance.getWheelSlices(widget.wheelId!);
     if (slicesData.isNotEmpty) {
@@ -100,19 +98,13 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
         probability: slice.probability ?? 1.0,
       );
     }
-
-    // Update spin time
-    await AppDatabase.instance.updateSavedWheel(
-      widget.wheelId!,
-      widget.wheelTitle ?? 'Untitled wheel',
-      _spinTime,
-    );
   }
 
   @override
   void dispose() {
     _controller.close();
     _textController.dispose();
+    _confettiController.dispose();
     _settingsTapTimer?.cancel();
     super.dispose();
   }
@@ -144,14 +136,13 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
       return;
     }
 
-    final result = await Navigator.push<List<WheelSlice>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WheelProbabilityScreen(
+    final result = await Navigator.of(context).push<List<WheelSlice>>(
+      PageTransitions.slideFromBottom(
+        WheelProbabilityScreen(
           slices: _slices!,
           wheelTitle: widget.wheelTitle,
         ),
-      ),
+      ) as Route<List<WheelSlice>>,
     );
 
     if (result != null) {
@@ -167,23 +158,20 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
   }
 
   void _openSettings() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => WheelSettingsScreen(
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      PageTransitions.slideFromBottom(
+        WheelSettingsScreen(
           initialItems: _items,
           initialSlices: _slices,
-          initialSpinTime: _spinTime,
           wheelTitle: widget.wheelTitle,
         ),
-      ),
+      ) as Route<Map<String, dynamic>>,
     );
 
     if (result != null) {
       setState(() {
         _items = result['items'] as List<String>;
         _slices = result['slices'] as List<WheelSlice>?;
-        _spinTime = result['spinTime'] as double? ?? 4;
       });
       
       // Save to database if wheelId exists
@@ -214,8 +202,8 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
     final selected = _getWeightedRandomIndex();
     _controller.add(selected);
 
-    // Use the spin time from settings
-    final spinDuration = Duration(milliseconds: (_spinTime * 1000).round());
+    // Fixed spin duration of 4 seconds
+    const spinDuration = Duration(seconds: 4);
     
     Future.delayed(spinDuration, () async {
       if (mounted) {
@@ -223,6 +211,9 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
           _winner = _items[selected];
           _isSpinning = false;
         });
+        
+        // Play confetti animation
+        _confettiController.play();
         
         // Increment spin count in database
         if (widget.wheelId != null) {
@@ -276,41 +267,109 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
   void _showWinnerDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🎉 Chúc Mừng! 🎉'),
-        content: Text(
-          'Người trúng thưởng:\n$_winner',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _items.remove(_winner);
-                
-                // Update slices configuration
-                if (_slices != null) {
-                  final slice = _slices!.firstWhere(
-                    (s) => s.name == _winner,
-                    orElse: () => WheelSlice(name: ''),
-                  );
-                  if (slice.name.isNotEmpty) {
-                    if (slice.repeat > 1) {
-                      slice.repeat--;
-                    } else {
-                      _slices!.remove(slice);
+      barrierDismissible: false,
+      builder: (context) => Stack(
+        children: [
+          AlertDialog(
+            title: const Text('🎉 Chúc Mừng! 🎉'),
+            content: Text(
+              '\n$_winner',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _items.remove(_winner);
+                    
+                    // Update slices configuration
+                    if (_slices != null) {
+                      final slice = _slices!.firstWhere(
+                        (s) => s.name == _winner,
+                        orElse: () => WheelSlice(name: ''),
+                      );
+                      if (slice.name.isNotEmpty) {
+                        if (slice.repeat > 1) {
+                          slice.repeat--;
+                        } else {
+                          _slices!.remove(slice);
+                        }
+                      }
                     }
-                  }
-                }
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Xóa khỏi vòng quay'),
+                  });
+                  Navigator.pop(context);
+                },
+                child: const Text('Xóa khỏi vòng quay'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Giữ lại'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Giữ lại'),
+          // Confetti overlay on top of dialog
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirection: 3.14 / 2,
+              emissionFrequency: 0.05,
+              numberOfParticles: 15,
+              gravity: 0.2,
+              shouldLoop: false,
+              colors: const [
+                Colors.red,
+                Colors.blue,
+                Colors.green,
+                Colors.yellow,
+                Colors.pink,
+                Colors.purple,
+                Colors.orange,
+              ],
+            ),
+          ),
+          // Left side confetti
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirection: 0,
+              emissionFrequency: 0.05,
+              numberOfParticles: 10,
+              gravity: 0.1,
+              shouldLoop: false,
+              colors: const [
+                Colors.red,
+                Colors.blue,
+                Colors.green,
+                Colors.yellow,
+                Colors.pink,
+                Colors.purple,
+                Colors.orange,
+              ],
+            ),
+          ),
+          // Right side confetti
+          Align(
+            alignment: Alignment.centerRight,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirection: 3.14,
+              emissionFrequency: 0.05,
+              numberOfParticles: 10,
+              gravity: 0.1,
+              shouldLoop: false,
+              colors: const [
+                Colors.red,
+                Colors.blue,
+                Colors.green,
+                Colors.yellow,
+                Colors.pink,
+                Colors.purple,
+                Colors.orange,
+              ],
+            ),
           ),
         ],
       ),
@@ -332,130 +391,133 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // Wheel - Always show, even when empty
-            SizedBox(
-              height: 300,
-              child: _items.isEmpty
-                  ? Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.grey.shade200,
-                        border: Border.all(
-                          color: Colors.grey.shade400,
-                          width: 4,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Vòng Quay\nTrống',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  : _items.length == 1
-                      ? Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.primaries[0],
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 4,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _items[0],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        )
-                      : FortuneWheel(
-                          animateFirst: false,
-                          selected: _controller.stream,
-                          items: _items.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final item = entry.value;
-                            
-                            // Find the color from slices if available
-                            Color itemColor = Colors.primaries[index % Colors.primaries.length];
-                            if (_slices != null) {
-                              final slice = _slices!.firstWhere(
-                                (s) => s.name == item,
-                                orElse: () => WheelSlice(name: item, color: itemColor),
-                              );
-                              itemColor = slice.color;
-                            }
-                            
-                            return FortuneItem(
-                              child: Text(
-                                item,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+      body: Stack(
+        children: [
+          Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Wheel - Always show, even when empty
+                    SizedBox(
+                      height: 350,
+                      width: 350,
+                      child: _items.isEmpty
+                          ? Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey.shade200,
+                                border: Border.all(
+                                  color: Colors.grey.shade400,
+                                  width: 4,
                                 ),
                               ),
-                              style: FortuneItemStyle(
-                                color: itemColor,
+                              child: Center(
+                                child: Text(
+                                  'Vòng Quay\nTrống',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
-                            );
-                          }).toList(),
+                            )
+                          : _items.length == 1
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.primaries[0],
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 4,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _items[0],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                              : FortuneWheel(
+                                  animateFirst: false,
+                                  selected: _controller.stream,
+                                  items: _items.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final item = entry.value;
+                                    
+                                    // Find the color from slices if available
+                                    Color itemColor = Colors.primaries[index % Colors.primaries.length];
+                                    if (_slices != null) {
+                                      final slice = _slices!.firstWhere(
+                                        (s) => s.name == item,
+                                        orElse: () => WheelSlice(name: item, color: itemColor),
+                                      );
+                                      itemColor = slice.color;
+                                    }
+                                    
+                                    return FortuneItem(
+                                      child: Text(
+                                        item,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      style: FortuneItemStyle(
+                                        color: itemColor,
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                    ),
+                    
+                    const SizedBox(height: 40),
+                    
+                    // Spin Button - Always show
+                    ElevatedButton(
+                      onPressed: (_items.length >= 2 && !_isSpinning) ? _spin : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                        textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        disabledBackgroundColor: Colors.grey.shade400,
+                      ),
+                      child: Text(_isSpinning ? 'Đang Quay...' : '🎯 QUAY NGAY!'),
+                    ),
+                    
+                    if (_items.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                      )
+                    else if (_items.length < 2)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          'Thêm thêm 1 mục nữa để quay',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
-            ),
-            
-            const SizedBox(height: 30),
-            
-            // Spin Button - Always show
-            ElevatedButton(
-              onPressed: (_items.length >= 2 && !_isSpinning) ? _spin : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-                textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                disabledBackgroundColor: Colors.grey.shade400,
-              ),
-              child: Text(_isSpinning ? 'Đang Quay...' : '🎯 QUAY NGAY!'),
-            ),
-            
-            if (_items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  'Nhấn nút ⋮ để thêm phần thưởng',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
-                ),
-              )
-            else if (_items.length < 2)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  'Thêm thêm 1 mục nữa để quay',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                      ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
