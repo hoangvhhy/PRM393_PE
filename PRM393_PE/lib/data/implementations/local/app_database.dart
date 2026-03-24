@@ -115,12 +115,12 @@ class AppDatabase {
   }
 
   // Winner History Methods
-  Future<int> insertWinner(String gameType, String winnerName) async {
+  Future<int> insertWinner(String gameType, String winnerName, [String? createdAt]) async {
     final database = await db;
     return await database.insert('winners', {
       'game_type': gameType,
       'winner_name': winnerName,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': createdAt ?? DateTime.now().toIso8601String(),
     });
   }
 
@@ -130,6 +130,22 @@ class AppDatabase {
       'winners',
       orderBy: 'created_at DESC',
     );
+  }
+  
+  Future<List<Map<String, dynamic>>> getWinnersByGame(String gameType) async {
+    final database = await db;
+    return await database.query(
+      'winners',
+      where: 'game_type = ?',
+      whereArgs: [gameType],
+      orderBy: 'created_at DESC',
+    );
+  }
+  
+  Future<int> getWinnersCount() async {
+    final database = await db;
+    final result = await database.rawQuery('SELECT COUNT(*) as count FROM winners');
+    return result.isNotEmpty ? (result.first['count'] as int?) ?? 0 : 0;
   }
 
   Future<int> clearWinners() async {

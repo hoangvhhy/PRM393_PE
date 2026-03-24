@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:prm393_pe/views/home/home_screen.dart';
+import 'package:prm393_pe/services/storage_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Migrate data from SharedPreferences to Database
+  await StorageService.migrateToDatabase();
+  
   runApp(const LuckyDrawApp());
 }
 

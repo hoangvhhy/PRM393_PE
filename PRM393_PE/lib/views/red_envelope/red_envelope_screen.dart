@@ -251,6 +251,7 @@ class _RedEnvelopeScreenState extends State<RedEnvelopeScreen>
             ),
           ),
           // Confetti on top of dialog
+          //bum bum
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(

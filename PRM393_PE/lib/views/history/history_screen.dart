@@ -10,6 +10,8 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, String>> _history = [];
+  String _filterGame = 'Tất cả';
+  int _totalCount = 0;
 
   @override
   void initState() {
@@ -18,9 +20,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _loadHistory() async {
-    final history = await StorageService.getHistory();
+    final history = _filterGame == 'Tất cả'
+        ? await StorageService.getHistory()
+        : await StorageService.getHistoryByGame(_filterGame);
+    final count = await StorageService.getHistoryCount();
+    
     setState(() {
       _history = history;
+      _totalCount = count;
     });
   }
 
@@ -53,7 +60,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('📜 Lịch Sử Trúng Thưởng'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('📜 Lịch Sử Trúng Thưởng'),
+            Text(
+              '$_totalCount kết quả',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
         backgroundColor: Colors.red.shade700,
         foregroundColor: Colors.white,
         actions: [
@@ -64,50 +80,99 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
         ],
       ),
-      body: _history.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: Column(
+        children: [
+          // Filter chips
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
                 children: [
-                  Icon(Icons.inbox, size: 80, color: Colors.grey),
-                  SizedBox(height: 20),
-                  Text(
-                    'Chưa có lịch sử',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
+                  _buildFilterChip('Tất cả'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Vòng Quay'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Random Số'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Lì Xì'),
                 ],
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _history.length,
-              itemBuilder: (context, index) {
-                final item = _history[_history.length - 1 - index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.red.shade700,
-                      child: Text(
-                        _getGameIcon(item['game'] ?? ''),
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                    ),
-                    title: Text(
-                      item['winner'] ?? '',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${item['game']} • ${item['time']}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ),
-                );
-              },
             ),
+          ),
+          const Divider(height: 1),
+          
+          // History list
+          Expanded(
+            child: _history.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox, size: 80, color: Colors.grey.shade400),
+                        const SizedBox(height: 20),
+                        Text(
+                          _filterGame == 'Tất cả' 
+                              ? 'Chưa có lịch sử'
+                              : 'Không có kết quả cho $_filterGame',
+                          style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _history.length,
+                    itemBuilder: (context, index) {
+                      final item = _history[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 2,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.red.shade700,
+                            child: Text(
+                              _getGameIcon(item['game'] ?? ''),
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                          ),
+                          title: Text(
+                            item['winner'] ?? '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${item['game']} • ${_formatTime(item['time'] ?? '')}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label) {
+    final isSelected = _filterGame == label;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _filterGame = label;
+        });
+        _loadHistory();
+      },
+      selectedColor: Colors.red.shade700,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.black87,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
     );
   }
 
@@ -121,6 +186,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return '🧧';
       default:
         return '🎁';
+    }
+  }
+
+  String _formatTime(String time) {
+    try {
+      final dateTime = DateTime.parse(time);
+      final now = DateTime.now();
+      final diff = now.difference(dateTime);
+
+      if (diff.inDays == 0) {
+        if (diff.inHours == 0) {
+          if (diff.inMinutes == 0) {
+            return 'Vừa xong';
+          }
+          return '${diff.inMinutes} phút trước';
+        }
+        return '${diff.inHours} giờ trước';
+      } else if (diff.inDays == 1) {
+        return 'Hôm qua';
+      } else if (diff.inDays < 7) {
+        return '${diff.inDays} ngày trước';
+      } else {
+        return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+      }
+    } catch (e) {
+      return time;
     }
   }
 }
